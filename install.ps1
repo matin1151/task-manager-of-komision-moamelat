@@ -22,7 +22,8 @@ $shortcut = $shell.CreateShortcut((Join-Path ([Environment]::GetFolderPath('Desk
 $shortcut.TargetPath = 'http://127.0.0.1:8765/index.html'; $shortcut.Save()
 Start-Process 'http://127.0.0.1:8765/index.html'
 Write-Host 'نصب با موفقیت انجام شد.' -ForegroundColor Green
-} catch {
+}
+catch {
   Write-Host 'نصب انجام نشد:' -ForegroundColor Red
   Write-Host $_.Exception.Message -ForegroundColor Yellow
   exit 1
