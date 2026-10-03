@@ -5,7 +5,7 @@ $pythonZip = Join-Path $env:TEMP 'python-embed.zip'
 $pythonUrl = 'https://www.python.org/ftp/python/3.12.10/python-3.12.10-embed-amd64.zip'
 New-Item -ItemType Directory -Force -Path $app | Out-Null
 Copy-Item (Join-Path $PSScriptRoot 'index.html'), (Join-Path $PSScriptRoot 'server.py') -Destination $app -Force
-if (-not (Test-Path (Join-Path $app 'python.exe'))) {
+if (-not (Test-Path (Join-Path $app 'python.exe')))) {
   Write-Host 'در حال دریافت Python مستقل...'
   Invoke-WebRequest $pythonUrl -OutFile $pythonZip -UseBasicParsing
   Expand-Archive $pythonZip -DestinationPath $app -Force
