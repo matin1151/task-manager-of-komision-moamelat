@@ -94,8 +94,10 @@ button{cursor:pointer;border:0}
 .cards{display:grid;grid-template-columns:repeat(5,1fr);gap:13px;margin-bottom:18px}
 .card{
   background:rgba(255,253,249,.92);border:1px solid var(--line);border-radius:16px;
-  padding:17px;box-shadow:var(--shadow);min-height:92px
+  padding:17px;box-shadow:var(--shadow);min-height:92px;cursor:pointer;transition:.18s
 }
+.card:hover{transform:translateY(-2px);box-shadow:0 14px 34px rgba(25,52,76,.12);border-color:#d8c58e}
+.card:focus{outline:2px solid var(--gold);outline-offset:2px}
 .card .n{font-size:29px;font-weight:800;line-height:1.2}
 .card small{color:#68798a;font-size:13px;font-weight:600}
 .card:nth-child(1){border-top:3px solid #9b9da1}
@@ -152,6 +154,7 @@ button{cursor:pointer;border:0}
   display:flex;justify-content:space-between;align-items:center
 }
 .stagehead strong{font-size:15px}.progress{font-size:13px;color:var(--muted)}
+.stagehead{cursor:pointer;user-select:none}.stagehead:hover{background:#eef4f8}.stage-chevron{font-size:18px;color:var(--navy);width:24px;text-align:center}.stagehead-main{display:flex;align-items:center;gap:8px}.stage-body{display:none}.stage.open .stage-body{display:block}.stage.complete .stagehead{background:linear-gradient(90deg,#edf8f2,#f4f7fa)}
 .sub{padding:9px 15px;display:flex;gap:10px;align-items:center;font-size:14px;border-top:1px solid #f1eee8}
 .sub input{accent-color:var(--teal);width:16px;height:16px}
 .toast{position:fixed;bottom:22px;left:22px;background:var(--navy);color:#fff;padding:12px 17px;border-radius:11px;display:none;z-index:20;box-shadow:var(--shadow)}
@@ -748,25 +751,6 @@ button{cursor:pointer;border:0}
 .date-field .date-tools-row #jalaliPicker.jalali-picker{flex:0 0 250px!important;width:250px!important;min-width:250px!important;max-width:250px!important;position:relative!important;top:auto!important;right:auto!important;left:auto!important;bottom:auto!important;margin:0!important}
 @media (max-width:820px){.date-field .date-tools-row #jalaliPicker.jalali-picker{flex-basis:220px!important;width:220px!important;min-width:220px!important;max-width:220px!important}}
 @media (max-width:650px){.date-field .date-tools-row{flex-direction:column!important}.date-field .date-tools-row .date-suggestion-box{width:100%!important;flex:auto!important}.date-field .date-tools-row #jalaliPicker.jalali-picker{width:100%!important;min-width:0!important;max-width:none!important;flex:auto!important}}
-
-/* V26 — stage accordion: titles always visible, workflow opens one stage at a time */
-.stage.accordion-stage{overflow:hidden;background:#fff;border:1px solid var(--line);border-radius:14px;margin:10px 0}
-.stagehead.accordion-head{padding:0;background:linear-gradient(90deg,#fbfaf6,#f4f7fa);min-height:54px}
-.stage-toggle{width:100%;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 15px;background:transparent;color:var(--text);text-align:right;cursor:pointer}
-.stage-title-wrap{display:flex;align-items:center;gap:10px;min-width:0}
-.stage-chevron{width:25px;height:25px;display:inline-flex;align-items:center;justify-content:center;border-radius:7px;background:#edf3f7;color:var(--navy);font-size:19px;font-weight:900;line-height:1;flex:none;transition:.18s}
-.stage-chevron.open{background:#e9f4f1;color:var(--teal)}
-.stage-chevron.complete{background:#e9f4f1;color:var(--teal)}
-.stage-title{font-size:15px;font-weight:800}
-.stage-progress{font-size:12px;color:var(--muted);white-space:nowrap}
-.stage-body{display:none}
-.stage-body.open{display:block}
-.stage-complete .stage-toggle{background:linear-gradient(90deg,#f8fbf9,#eef8f5)}
-.stage-complete .stage-title{color:#167b66}
-.stage-complete .stagehead{border-bottom:1px solid #d8ebe5}
-@media(max-width:650px){
- .stage-toggle{padding:12px}.stage-progress{font-size:11px}.stage-title{font-size:14px}
-}
 </style>
 
 </head>
@@ -877,7 +861,16 @@ const workflows={
 ['پرداخت',['دریافت فیش پرداخت بانکی از مالی','امضای ذیحساب در ستاد','امضای مقام تشخیص','امضای صاحب امضای سوم','ارسال فیش بانکی به ستاد','امضای ذیحساب','چاپ برگه «تحویل حواله بانکی»']],
 ['★ ثبت در بایگانی',['ثبت در بایگانی']]
 ]};
-let db=JSON.parse(localStorage.getItem(KEY)||'{"transactions":[],"tasks":[]}');
+function loadDB(){
+ try{
+   const raw=JSON.parse(localStorage.getItem(KEY)||'{"transactions":[],"tasks":[]}');
+   return {transactions:Array.isArray(raw?.transactions)?raw.transactions:[],tasks:Array.isArray(raw?.tasks)?raw.tasks:[]};
+ }catch(e){
+   console.warn('Local data could not be parsed; starting with a safe empty database.',e);
+   return {transactions:[],tasks:[]};
+ }
+}
+let db=loadDB();
 let page='dashboard', selected=null;
 function migrateTransactionDates(){
  let changed=false;
@@ -940,6 +933,21 @@ function jToday(){
 }
 function pd(n){return String(n).replace(/\d/g,d=>'۰۱۲۳۴۵۶۷۸۹'[d]);}
 function jd(y,m,d){return `${pd(y)}/${pd(String(m).padStart(2,'0'))}/${pd(String(d).padStart(2,'0'))}`;}
+function parseJDate(s){
+ const d=canonicalJDate(s);
+ return d?{y:d.y,m:d.m,d:d.d}:null;
+}
+function addJDays(y,m,d,days){
+ const g=jalaliToGregorian(y,m,d);
+ g.setUTCDate(g.getUTCDate()+Number(days||0));
+ const p=new Intl.DateTimeFormat('en-US-u-ca-persian',{year:'numeric',month:'numeric',day:'numeric',timeZone:'UTC'}).formatToParts(g);
+ const yy=+p.find(x=>x.type==='year').value,mm=+p.find(x=>x.type==='month').value,dd=+p.find(x=>x.type==='day').value;
+ return jd(yy,mm,dd);
+}
+function currentCreateType(){
+ const mode=typeof createMode==='string'?createMode:'routine';
+ return mode==='routine' ? (document.getElementById('routineType')?.value||'مزایده') : (document.getElementById('newType')?.value||'مزایده');
+}
 
 /* Exact Jalali -> Gregorian conversion (jalaali algorithm). */
 function jalCal(jy){
@@ -1043,28 +1051,10 @@ document.addEventListener('click',function(e){
 
 let currentSuggestedDates=[];
 
-/* Date helpers: keep all UI dates Jalali, store/compute with exact Gregorian UTC timestamps. */
-function parseJDate(value){
- const d=canonicalJDate(value);
- return d?{y:d.y,m:d.m,d:d.d}:null;
-}
-function addJDays(y,m,d,days){
- const g=jalaliToGregorian(y,m,d);
- g.setUTCDate(g.getUTCDate()+Number(days||0));
- const p=new Intl.DateTimeFormat('en-US-u-ca-persian',{year:'numeric',month:'numeric',day:'numeric',timeZone:'UTC'}).formatToParts(g);
- const yy=+p.find(x=>x.type==='year').value, mm=+p.find(x=>x.type==='month').value, dd=+p.find(x=>x.type==='day').value;
- return {date:jd(yy,mm,dd),y:yy,m:mm,d:dd};
-}
-function currentCreateType(){
- const routine=document.getElementById('routineBox');
- if(routine && routine.style.display!=='none') return document.getElementById('routineType')?.value||'مزایده';
- return document.getElementById('newType')?.value||'مزایده';
-}
-
 function jDateTimeToMs(dateStr,timeStr='00:00'){
  const d=parseJDate(dateStr);
  if(!d)return NaN;
- const tm=normalizeDigits(String(timeStr||'00:00')).split(':');
+ const tm=String(timeStr||'00:00').split(':');
  const hh=Number(tm[0]), mm=Number(tm[1]);
  if(!Number.isFinite(hh)||!Number.isFinite(mm)||hh<0||hh>23||mm<0||mm>59)return NaN;
  const g=jalaliToGregorian(d.y,d.m,d.d);
@@ -1081,10 +1071,7 @@ function addJMinutes(dateStr,timeStr,minutes){
  return {date:jd(y,m,d),time:`${hh}:${mm}`};
 }
 function minSuggestionRows(base,type){
- // addJDays/addJMinutes return objects with separate date/time fields.
- // Keep only the Jalali date string in each row so the UI never renders [object Object].
- const docs=addJDays(base.y,base.m,base.d,3), docsTime='15:00';
- const docsDate=docs.date;
+ const docsDate=addJDays(base.y,base.m,base.d,3), docsTime='15:00';
  // Core rule used by this workflow: the interval from the final document deadline
  // to the final bid deadline must be at least 10 full days, including the time.
  const offer=addJMinutes(docsDate,docsTime,10*24*60);
@@ -1253,27 +1240,56 @@ function createTx(){
  if(!dateISO){toast('تاریخ شمسی معتبر نیست');return;}
  let suggested=(window.confirmedSuggestedDates||[]).map(x=>({...x}));
  let stages=workflows[type].map(s=>({name:s[0],items:s[1].map(x=>({name:x,done:false})),custom:false}));
- // Reminder rules tied to the actual opening date. These are stored with the transaction for the future notification layer.
- stages.forEach(st=>st.items.forEach(it=>{
-   if(it.name==='ارسال نامه دعوت به جلسه اعضای کمیسیون' || it.name==='ارسال نامه دعوت به جلسه سازمان بازرسی'){
-     it.reminder={type:'before-stage-date',stageName:'بازگشایی',daysBefore:3};
-   }
- }));
  let tx={id:Date.now(),type,subject,ref,date:dateISO,dateJalali:canonicalJDate(date)?.display||date,unit,stage:0,stages,status:'فعال',created:new Date().toISOString(),archived:false,suggestedDates:suggested,suggestedDatesConfirmed:suggested.length>0};
  db.transactions.unshift(tx);save();closeModal();selected=tx.id;toast('معامله ایجاد شد');showTransaction(tx.id)
 }
 function filtered(){let q=(document.getElementById('search')?.value||'').trim().toLowerCase();return db.transactions.filter(t=>!q||[t.subject,t.ref,t.type,t.unit].join(' ').toLowerCase().includes(q))}
-function counts(){let a=db.transactions.filter(t=>!t.archived),closed=db.transactions.filter(t=>t.archived);let tasks=a.reduce((n,t)=>n+t.stages.reduce((m,s)=>m+s.items.filter(i=>!i.done).length,0),0);return {all:db.transactions.length,active:a.length,closed:closed.length,tasks}}
-function render(){if(page==='dashboard')dashboard();else if(page==='reports')reports();else if(page==='tasks')tasksPage();else if(page==='settings')settings();else if(page==='archive')listPage(true);else if(['auction','tender','purchase','all'].includes(page))listPage(false)}
+function todayStartMs(){const d=new Date();return new Date(d.getFullYear(),d.getMonth(),d.getDate()).getTime()}
+function taskDueMs(t,s,si,ii){
+  const it=s.items[ii];
+  if(it&&it.dueAt){const x=new Date(it.dueAt).getTime();if(Number.isFinite(x))return x;}
+  const rows=t.suggestedDates||[];
+  const rowByKey=k=>rows.find(r=>r.key===k);
+  const name=String(it?.name||'');
+  let row=null, offset=0;
+  if(/دعوت به جلسه اعضای کمیسیون/.test(name)){ row=rowByKey('بازگشایی'); offset=-3*86400000; }
+  else if(/دعوت به جلسه سازمان بازرسی/.test(name)){ row=rowByKey('بازگشایی'); offset=-3*86400000; }
+  else if(/اصل سپرده/.test(name)){ row=rowByKey('بازگشایی'); offset=name.includes('۱ روز')?-86400000:0; }
+  else {
+    const keyMap={'بازدید':'بازدید','اسناد':'اسناد','پیشنهاد':'پیشنهاد','بازگشایی':'بازگشایی','برنده':'برنده'};
+    const key=Object.keys(keyMap).find(k=>name.includes(k));
+    if(key)row=rowByKey(keyMap[key]);
+  }
+  if(row){
+    const base=jDateTimeToMs(row.date,row.time);
+    return Number.isFinite(base)?base+offset:null;
+  }
+  return null;
+}
+
+function allOpenTasks(){
+ const arr=[];db.transactions.filter(t=>!t.archived).forEach(t=>t.stages.forEach((s,si)=>s.items.forEach((it,ii)=>{if(!it.done)arr.push({t,s,it,si,ii,due:taskDueMs(t,s,si,ii)})})));
+ return arr;
+}
+function counts(){
+ let a=db.transactions.filter(t=>!t.archived),closed=db.transactions.filter(t=>t.archived),tasks=allOpenTasks(),now=Date.now(),today=todayStartMs(),tomorrow=today+86400000;
+ const overdue=tasks.filter(x=>x.due&&x.due<now).length;
+ const todayCount=tasks.filter(x=>x.due&&x.due>=today&&x.due<tomorrow).length;
+ const others=tasks.filter(x=>/پذیرش|تأیید|تأیید|ارسال|واریز|دریافت|واحد درخواست|تأمین‌کننده|برنده/.test(x.it.name)).length;
+ return {all:db.transactions.length,active:a.length,closed:closed.length,tasks:tasks.length,overdue,today:todayCount,others};
+}
+function render(){if(page==='dashboard')dashboard();else if(page==='reports')reports();else if(page==='tasks')tasksPage(taskFilter);else if(page==='settings')settings();else if(page==='archive')listPage(true);else if(['auction','tender','purchase','all'].includes(page))listPage(false)}
+let taskFilter='all';
+function showTaskFilter(filter){taskFilter=filter||'all';page='tasks';document.getElementById('pageTitle').textContent=filter==='overdue'?'کارهای عقب‌افتاده':filter==='today'?'کارهای امروز':filter==='others'?'منتظر اقدام دیگران':'کارهای من';render();}
 function dashboard(){
  let c=counts(), tx=filtered().filter(t=>!t.archived).slice(0,8);
  document.getElementById('content').innerHTML=`
  <div class="cards">
-  <div class="card"><small>معاملات بسته‌شده</small><div class="n">${c.closed}</div></div>
-  <div class="card"><small>منتظر اقدام دیگران</small><div class="n">${Math.min(3,c.active)}</div></div>
-  <div class="card"><small>معاملات فعال</small><div class="n">${c.active}</div></div>
-  <div class="card"><small>کارهای عقب‌افتاده</small><div class="n">${Math.min(2,c.tasks)}</div></div>
-  <div class="card"><small>کارهای امروز</small><div class="n">${Math.min(5,c.tasks)}</div></div>
+  <div class="card" role="button" tabindex="0" onclick="showPage('archive')"><small>معاملات بسته‌شده</small><div class="n">${c.closed}</div></div>
+  <div class="card" role="button" tabindex="0" onclick="showTaskFilter('others')"><small>منتظر اقدام دیگران</small><div class="n">${c.others}</div></div>
+  <div class="card" role="button" tabindex="0" onclick="showPage('all')"><small>معاملات فعال</small><div class="n">${c.active}</div></div>
+  <div class="card" role="button" tabindex="0" onclick="showTaskFilter('overdue')"><small>کارهای عقب‌افتاده</small><div class="n">${c.overdue}</div></div>
+  <div class="card" role="button" tabindex="0" onclick="showTaskFilter('today')"><small>کارهای امروز</small><div class="n">${c.today}</div></div>
  </div>
  <div class="layout">
   <div class="panel">
@@ -1300,9 +1316,10 @@ function dashboard(){
   ${tx.length?tx.map(txRow).join(''):'<div class="empty">هنوز معامله‌ای ثبت نشده است.</div>'}
  </div>`;
 }
-function taskPreview(){
- let arr=[];db.transactions.filter(t=>!t.archived).forEach(t=>t.stages.forEach((s,si)=>s.items.forEach((it,ii)=>{if(!it.done&&arr.length<10)arr.push({t,s,it,si,ii})})));
- return arr.length?arr.map(x=>`<div class="task"><i class="dot ${x.si===0?'orange':'blue'}"></i><div><b>${esc(x.it.name)}</b><span>${esc(x.t.subject)} · ${esc(x.s.name)}</span></div><button class="btn" style="margin-right:auto;padding:5px 9px" onclick="showTransaction(${x.t.id})">باز کردن</button></div>`).join(''):'<div class="empty">همه کارها انجام شده‌اند 🎉</div>'
+function taskPreview(filter='all'){
+ let now=Date.now(),today=todayStartMs(),tomorrow=today+86400000;
+ let arr=allOpenTasks().filter(x=>filter==='overdue' ? (x.due&&x.due<now) : filter==='today' ? (x.due&&x.due>=today&&x.due<tomorrow) : filter==='others' ? /پذیرش|تأیید|تأیید|ارسال|واریز|دریافت|واحد درخواست|تأمین‌کننده|برنده/.test(x.it.name) : true).slice(0,50);
+ return arr.length?arr.map(x=>`<div class="task"><i class="dot ${x.due&&x.due<now?'red':x.due&&x.due<today+86400000?'orange':'blue'}"></i><div><b>${esc(x.it.name)}</b><span>${esc(x.t.subject)} · ${esc(x.s.name)}${x.due?' · سررسید: '+faDate(new Date(x.due).toISOString()):''}</span></div><button class="btn" style="margin-right:auto;padding:5px 9px" onclick="showTransaction(${x.t.id})">باز کردن</button></div>`).join(''):'<div class="empty">موردی برای نمایش وجود ندارد.</div>'
 }
 function txRow(t){let s=t.stages[t.stage], done=s.items.filter(i=>i.done).length;return `<div class="tx"><div><b>${esc(t.subject)}</b><span>${esc(t.ref||'بدون شماره')} · ${esc(t.type)}</span></div><span class="badge">${esc(s.name)}</span><span>${done}/${s.items.length}</span><span>${faDate(t.date)}</span><button class="btn" onclick="showTransaction(${t.id})">ورود</button></div>`}
 function listPage(archive){
@@ -1310,51 +1327,44 @@ function listPage(archive){
  let arr=filtered().filter(t=>archive?t.archived:!t.archived&&(!wanted||t.type===wanted));
  document.getElementById('content').innerHTML=`<div class="panel"><div style="display:flex;justify-content:space-between;align-items:center"><h2>${archive?'★ بایگانی':wanted||'همه معاملات'}</h2><button class="btn primary" onclick="${wanted ? `openNew('${wanted}')` : 'openNew()'}">＋ ${wanted ? 'خرید جدید'.replace('خرید',wanted) : 'معامله جدید'}</button></div>${arr.length?arr.map(txRow).join(''):'<div class="empty">موردی برای نمایش وجود ندارد.</div>'}</div>`;
 }
-function tasksPage(){
- document.getElementById('content').innerHTML=`<div class="panel"><h2>✓ کارهای من</h2>${taskPreview()}</div>`;
+function tasksPage(filter='all'){
+ const title=filter==='overdue'?'کارهای عقب‌افتاده':filter==='today'?'کارهای امروز':filter==='others'?'منتظر اقدام دیگران':'کارهای من';
+ document.getElementById('content').innerHTML=`<div class="panel"><div style="display:flex;justify-content:space-between;align-items:center;gap:10px"><h2>✓ ${title}</h2><button class="btn" onclick="showTaskFilter('all')">همه کارها</button></div>${taskPreview(filter)}</div>`;
 }
 function reports(){
  let c=counts();document.getElementById('content').innerHTML=`<div class="panel"><h2>📊 گزارش وضعیت</h2><div class="cards" style="margin-top:12px"><div class="card"><small>کل</small><div class="n">${c.all}</div></div><div class="card"><small>فعال</small><div class="n">${c.active}</div></div><div class="card"><small>بایگانی</small><div class="n">${c.closed}</div></div></div><button class="btn primary" onclick="exportJSON()">پشتیبان‌گیری از داده‌ها</button></div>`;
 }
-function settings(){document.getElementById('content').innerHTML=`<div class="panel"><h2>⚙ تنظیمات</h2><p style="color:var(--muted);font-size:13px">نسخه MVP محلی است. اطلاعات در همین مرورگر ذخیره می‌شود. در نسخه بعدی، SQLite، Backup/Restore، اعلان دسکتاپ و Android Companion اضافه می‌شوند.</p><button class="btn" onclick="exportJSON()">خروجی پشتیبان JSON</button> <button class="btn" onclick="clearDB()">پاک‌کردن داده‌های آزمایشی</button></div>`}
-let stageOpenState={};
+function settings(){let ok=('Notification' in window&&Notification.permission==='granted');document.getElementById('content').innerHTML=`<div class="panel"><h2>⚙ تنظیمات</h2><p style="color:var(--muted);font-size:13px">آلارم‌های مرورگر برای تاریخ‌های ثبت‌شده فعال هستند. بررسی آلارم هر ۳۰ ثانیه انجام می‌شود و برای کارهای سفارشی نیز موعد قابل ثبت است.</p><div style="display:flex;gap:8px;flex-wrap:wrap;margin:12px 0"><button class="btn primary" onclick="enableAlarms()">🔔 ${ok?'آلارم‌ها فعال است':'فعال‌سازی آلارم‌ها'}</button><button class="btn" onclick="exportJSON()">خروجی پشتیبان JSON</button><button class="btn" onclick="clearDB()">پاک‌کردن داده‌های آزمایشی</button></div><div class="date">این نسخه تک‌فایلی وقتی صفحه/مرورگر باز است آلارم را اجرا می‌کند. اعلان هنگام بسته بودن صفحه برای نسخه نهایی باید با PWA/سرویس پس‌زمینه تکمیل شود.</div></div>`}
+let openStages={};
+function toggleStage(id,si){if(openStages[id]===undefined)openStages[id]={};openStages[id][si]=!openStages[id][si];showTransaction(id);}
 function showTransaction(id){
  selected=id;let t=db.transactions.find(x=>x.id===id);if(!t)return;document.getElementById('pageTitle').textContent=t.subject;
- if(stageOpenState[id]===undefined) stageOpenState[id]=t.stage;
- let openStage=stageOpenState[id];
+ if(openStages[id]===undefined)openStages[id]={};
  let body=t.stages.map((s,si)=>{
-   let done=s.items.filter(i=>i.done).length;
-   let complete=s.items.length>0 && done===s.items.length;
-   let isOpen=openStage===si;
-   let chevron=complete?'⌃':(isOpen?'⌄':'›');
-   let chevClass=complete?'complete':(isOpen?'open':'');
-   return `<div class="stage accordion-stage ${complete?'stage-complete':''}">
-     <div class="stagehead accordion-head">
-       <button type="button" class="stage-toggle" onclick="toggleStage(${t.id},${si})" aria-expanded="${isOpen?'true':'false'}">
-         <span class="stage-title-wrap"><span class="stage-chevron ${chevClass}">${chevron}</span><span class="stage-title">${si+1}. ${esc(s.name)}</span></span>
-         <span class="stage-progress">${done} / ${s.items.length} انجام شده</span>
-       </button>
-     </div>
-     <div class="stage-body ${isOpen?'open':''}">${s.items.map((it,ii)=>`<label class="sub"><input type="checkbox" ${it.done?'checked':''} onchange="toggleItem(${t.id},${si},${ii})"><span>${esc(it.name)}${it.reminder?'<small style="margin-right:8px;color:var(--gold);font-weight:700">🔔 ۳ روز قبل از بازگشایی</small>':''}</span></label>`).join('')}</div>
-   </div>`
+   let done=s.items.filter(i=>i.done).length, complete=done===s.items.length;
+   const isOpen=!!openStages[id][si];
+   return `<div class="stage ${complete?'complete ':''}${isOpen?'open':''}" id="stage_${si}">`+
+   `<div class="stagehead" onclick="toggleStage(${t.id},${si})"><div class="stagehead-main"><span class="stage-chevron" id="chev_${si}">${isOpen?'⌄':'›'}</span><strong>${si+1}. ${esc(s.name)}</strong></div><span class="progress">${complete?'✓ ':''}${done} / ${s.items.length} انجام شده</span></div>`+
+   `<div class="stage-body">${s.items.map((it,ii)=>`<label class="sub"><input type="checkbox" ${it.done?'checked':''} onchange="toggleItem(${t.id},${si},${ii})"><span>${esc(it.name)}${it.dueAt?` <small style="color:var(--muted)">· ${faDate(new Date(it.dueAt).toISOString())}</small>`:''}</span></label>`).join('')}</div></div>`;
  }).join('');
  document.getElementById('content').innerHTML=`<div class="panel"><div style="display:flex;justify-content:space-between;gap:15px;align-items:flex-start"><div><span class="badge">${esc(t.type)}</span><h2 style="margin-top:9px">${esc(t.subject)}</h2><div class="date">شماره: ${esc(t.ref||'—')} · تاریخ: ${faDate(t.date)} · واحد: ${esc(t.unit||'—')}</div></div><div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end"><button class="btn" onclick="showPage('all')">بازگشت</button><button class="btn" style="background:#fff0f0;color:#c73535;border-color:#f0caca" onclick="deleteTx(${t.id})">🗑 حذف معامله</button></div></div><div class="workflow">${body}</div><div style="margin-top:16px;display:flex;gap:8px"><button class="btn" onclick="addCustomStage(${t.id})">＋ مرحله سفارشی</button><button class="btn green" onclick="archiveTx(${t.id})">★ ثبت در بایگانی</button></div></div>`;
 }
-function toggleStage(id,si){
- let t=db.transactions.find(x=>x.id===id);if(!t)return;
- let s=t.stages[si];let complete=s.items.length>0 && s.items.every(i=>i.done);
- if(stageOpenState[id]===si){stageOpenState[id]=null;}else{stageOpenState[id]=si;}
- showTransaction(id);
-}
+
 function toggleItem(id,si,ii){
- let t=db.transactions.find(x=>x.id===id);if(!t)return;
- t.stages[si].items[ii].done=!t.stages[si].items[ii].done;
- // تکمیل مرحله فقط وضعیت آن را تغییر می‌دهد؛ مرحله همچنان قابل باز شدن/بسته شدن است و قفل نمی‌شود.
- t.stage=si;
- stageOpenState[id]=si;
- save();showTransaction(id)
+ let t=db.transactions.find(x=>x.id===id);if(!t||!t.stages?.[si]?.items?.[ii])return;
+ let item=t.stages[si].items[ii];item.done=!item.done;
+ let s=t.stages[si],complete=s.items.length>0&&s.items.every(i=>i.done);
+ if(complete){
+   if(si===t.stages.length-1 && /ثبت در بایگانی/.test(s.name)){
+     t.archived=true;t.status='بایگانی';save();toast('معامله بایگانی شد');showPage('archive');return;
+   }
+   if(si<t.stages.length-1)t.stage=Math.max(t.stage||0,si+1);
+ }else if((t.stage||0)>si){
+   t.stage=si;
+ }
+ save();showTransaction(id);
 }
-function addCustomStage(id){let t=db.transactions.find(x=>x.id===id);let title=prompt('عنوان مرحله سفارشی را وارد کنید:');if(!title)return;let note=prompt('یادداشت کوتاه (اختیاری):')||'';t.stages.splice(t.stage+1,0,{name:title,items:[{name:note?`یادداشت: ${note}`:'انجام مرحله',done:false}],custom:true});save();showTransaction(id)}
+function addCustomStage(id){let t=db.transactions.find(x=>x.id===id);let title=prompt('عنوان مرحله سفارشی را وارد کنید:');if(!title)return;let note=prompt('یادداشت کوتاه (اختیاری):')||'';let due=prompt('موعد یادآوری (اختیاری) به میلادی ISO، مثال 2026-10-05T15:00:00');let dueAt=due&&Number.isFinite(new Date(due).getTime())?new Date(due).toISOString():null;t.stages.splice(t.stage+1,0,{name:title,items:[{name:note?`یادداشت: ${note}`:'انجام مرحله',done:false,dueAt}],custom:true});save();showTransaction(id)}
 function deleteTx(id){
  let t=db.transactions.find(x=>x.id===id);
  if(!t)return;
@@ -1363,12 +1373,72 @@ function deleteTx(id){
    save(); selected=null; toast('معامله حذف شد'); showPage('all');
  }
 }
-function archiveTx(id){let t=db.transactions.find(x=>x.id===id);if(confirm('این معامله به بایگانی منتقل شود؟')){t.archived=true;save();toast('معامله بایگانی شد');showPage('archive')}}
+function archiveTx(id){let t=db.transactions.find(x=>x.id===id);if(!t)return;if(confirm('این معامله به بایگانی منتقل شود؟')){t.archived=true;t.status='بایگانی';save();toast('معامله بایگانی شد');showPage('archive')}}
 function exportJSON(){let blob=new Blob([JSON.stringify(db,null,2)],{type:'application/json'}),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='yar-komision-backup.json';a.click();URL.revokeObjectURL(a.href)}
 function clearDB(){if(confirm('تمام داده‌های محلی حذف شود؟')){db={transactions:[],tasks:[]};save();render()}}
 function esc(s){return String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m]))}
 render();
 
+
+/* Real browser reminder engine: runs while this page is open. */
+let alarmTimer=null;
+const ALARM_KEY='yar-komision-fired-alarms-v1';
+function alarmStore(){try{return JSON.parse(localStorage.getItem(ALARM_KEY)||'{}')}catch(e){return {}}}
+function saveAlarmStore(x){localStorage.setItem(ALARM_KEY,JSON.stringify(x))}
+function alarmEvents(){
+ const out=[];
+ const add=(id,t,at,label)=>{if(Number.isFinite(at))out.push({id:t.id+'|'+id,tx:t,at,label});};
+ db.transactions.filter(t=>!t.archived).forEach(t=>{
+   if(t.date){const base=new Date(t.date).getTime();if(Number.isFinite(base)){
+     add('publication|day',t,base,'روز انتشار / شروع معامله');
+     add('publication|minus1',t,base-86400000,'۱ روز مانده به انتشار / شروع معامله');
+   }}
+   (t.suggestedDates||[]).forEach(r=>{
+     const base=jDateTimeToMs(r.date,r.time); if(!Number.isFinite(base))return;
+     if(r.key==='بازگشایی'){
+       add('opening|3d',t,base-3*86400000,'۳ روز مانده به بازگشایی — دعوت اعضای کمیسیون و سازمان بازرسی');
+       add('opening|24h',t,base-86400000,'۲۴ ساعت مانده به بازگشایی');
+       add('opening|2h',t,base-7200000,'۲ ساعت مانده به بازگشایی');
+       add('opening|now',t,base,'زمان بازگشایی');
+       add('deposit|1d',t,base-86400000,'۱ روز مانده به بازگشایی — کنترل اصل سپرده');
+       add('deposit|now',t,base,'روز بازگشایی — کنترل اصل سپرده');
+     }else if(r.key==='پیشنهاد'){
+       add('offer|2h',t,base-7200000,'۲ ساعت مانده به پایان ارسال پیشنهاد');
+       add('offer|now',t,base,'پایان ارسال پیشنهاد');
+     }else if(r.key==='اسناد'){
+       add('docs|1d',t,base-86400000,'۱ روز مانده به پایان دریافت اسناد');
+       add('docs|now',t,base,'پایان دریافت اسناد');
+     }else if(r.key==='برنده'){
+       add('winner|now',t,base,'زمان اعلام برنده');
+     }
+   });
+   // Custom task reminders persisted directly on task items.
+   t.stages.forEach(s=>s.items.forEach(it=>{
+     if(!it.done && it.dueAt){const at=new Date(it.dueAt).getTime(); if(Number.isFinite(at)){
+       add('task|'+(it.name||'task')+'|24h',t,at-86400000,'۱ روز مانده — '+it.name);
+       add('task|'+(it.name||'task')+'|now',t,at,'موعد کار — '+it.name);
+     }}
+   }));
+ });
+ return out;
+}
+
+function fireAlarm(ev){
+ const msg='⏰ '+ev.label+' — '+(ev.tx.subject||'معامله');
+ toast(msg);
+ try{if('Notification' in window && Notification.permission==='granted')new Notification('دستیار کمیسیون معاملات',{body:msg});}catch(e){}
+ try{const C=window.AudioContext||window.webkitAudioContext;if(C){const c=new C(),o=c.createOscillator(),g=c.createGain();o.frequency.value=880;g.gain.value=.04;o.connect(g);g.connect(c.destination);o.start();setTimeout(()=>{o.stop();c.close()},220);}}catch(e){}
+}
+function checkAlarms(){
+ const store=alarmStore(),now=Date.now();let changed=false;
+ alarmEvents().forEach(ev=>{if(ev.at<=now&&now-ev.at<36*3600000&&!store[ev.id]){store[ev.id]=now;changed=true;fireAlarm(ev)}});
+ if(changed)saveAlarmStore(store);
+}
+function enableAlarms(){
+ if(!('Notification' in window)){toast('این مرورگر اعلان دسکتاپ را پشتیبانی نمی‌کند');return;}
+ Notification.requestPermission().then(p=>{if(p==='granted'){toast('آلارم‌ها فعال شدند');checkAlarms()}else toast('اجازه اعلان داده نشد')});
+}
+function startAlarmEngine(){if(alarmTimer)clearInterval(alarmTimer);checkAlarms();alarmTimer=setInterval(checkAlarms,30000)}
 
 document.addEventListener('input',function(e){
  if(e.target && e.target.id==='newDate') refreshSuggestedDates();
@@ -1384,5 +1454,6 @@ document.addEventListener('change',function(e){
    setTimeout(showSuggestedDates,0);
  }
 });
+startAlarmEngine();
 </script>
 </body></html>
