@@ -389,7 +389,6 @@ button{cursor:pointer;border:0}
  padding:5px 10px;font:700 10px Tahoma,Vazirmatn,sans-serif;cursor:pointer
 }
 .suggestion-actions button.primary{background:#2d8fbd;color:#fff}
-}
 *{box-sizing:border-box}
 html,body{min-height:100%;margin:0}
 body{
@@ -1066,8 +1065,13 @@ function jDateTimeToMs(dateStr,timeStr='00:00'){
  const hh=Number(tm[0]), mm=Number(tm[1]);
  if(!Number.isFinite(hh)||!Number.isFinite(mm)||hh<0||hh>23||mm<0||mm>59)return NaN;
  const g=jalaliToGregorian(d.y,d.m,d.d);
+ // Suggested dates are entered in Tehran local time.
+ const parts=new Intl.DateTimeFormat('en-US',{timeZone:'Asia/Tehran',timeZoneName:'longOffset',hour:'2-digit',minute:'2-digit',hourCycle:'h23'}).formatToParts(g);
+ const tz=parts.find(x=>x.type==='timeZoneName')?.value||'GMT+03:30';
+ const m=tz.match(/GMT([+-])(\d{2}):(\d{2})/);
+ const offset=m?((m[1]==='-'?-1:1)*(Number(m[2])*60+Number(m[3]))):210;
  g.setUTCHours(hh,mm,0,0);
- return g.getTime();
+ return g.getTime()-offset*60000;
 }
 function addJMinutes(dateStr,timeStr,minutes){
  const ms=jDateTimeToMs(dateStr,timeStr);
@@ -1342,7 +1346,7 @@ function tasksPage(filter='all'){
 function reports(){
  let c=counts();document.getElementById('content').innerHTML=`<div class="panel"><h2>📊 گزارش وضعیت</h2><div class="cards" style="margin-top:12px"><div class="card"><small>کل</small><div class="n">${c.all}</div></div><div class="card"><small>فعال</small><div class="n">${c.active}</div></div><div class="card"><small>بایگانی</small><div class="n">${c.closed}</div></div></div><button class="btn primary" onclick="exportJSON()">پشتیبان‌گیری از داده‌ها</button></div>`;
 }
-function settings(){let ok=('Notification' in window&&Notification.permission==='granted');document.getElementById('content').innerHTML=`<div class="panel"><h2>⚙ تنظیمات</h2><p style="color:var(--muted);font-size:13px">آلارم‌های مرورگر برای تاریخ‌های ثبت‌شده فعال هستند. بررسی آلارم هر ۳۰ ثانیه انجام می‌شود و برای کارهای سفارشی نیز موعد قابل ثبت است.</p><div style="display:flex;gap:8px;flex-wrap:wrap;margin:12px 0"><button class="btn primary" onclick="enableAlarms()">🔔 ${ok?'آلارم‌ها فعال است':'فعال‌سازی آلارم‌ها'}</button><button class="btn" onclick="exportJSON()">خروجی پشتیبان JSON</button><button class="btn" onclick="clearDB()">پاک‌کردن داده‌های آزمایشی</button></div><div class="date">این نسخه تک‌فایلی وقتی صفحه/مرورگر باز است آلارم را اجرا می‌کند. اعلان هنگام بسته بودن صفحه برای نسخه نهایی باید با PWA/سرویس پس‌زمینه تکمیل شود.</div></div>`}
+function settings(){let ok=('Notification' in window&&Notification.permission==='granted');document.getElementById('content').innerHTML=`<div class="panel"><h2>⚙ تنظیمات</h2><p style="color:var(--muted);font-size:13px">موعدها هر ۳۰ ثانیه بررسی می‌شوند. وقتی صفحه باز است اعلان مرورگر فعال است و تا زمانی که سرور محلی اجرا باشد، موعدهای اصلی و کارهای سفارشی در پس‌زمینه نیز بررسی می‌شوند.</p><div style="display:flex;gap:8px;flex-wrap:wrap;margin:12px 0"><button class="btn primary" onclick="enableAlarms()">🔔 ${ok?'آلارم‌های مرورگر فعال است':'فعال‌سازی آلارم مرورگر'}</button><button class="btn" onclick="exportJSON()">خروجی پشتیبان JSON</button><button class="btn" onclick="clearDB()">پاک‌کردن داده‌های آزمایشی</button></div><div class="date">برای آلارم هنگام بسته بودن مرورگر، پنجره سرور که با start.bat اجرا می‌شود باید فعال بماند.</div></div>`}
 let openStages={};
 function toggleStage(id,si){if(openStages[id]===undefined)openStages[id]={};openStages[id][si]=!openStages[id][si];showTransaction(id);}
 function showTransaction(id){
