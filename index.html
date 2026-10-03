@@ -1425,10 +1425,11 @@ function alarmEvents(){
      }
    });
    // Custom task reminders persisted directly on task items.
-   t.stages.forEach(s=>s.items.forEach(it=>{
+   t.stages.forEach((s,si)=>s.items.forEach((it,ii)=>{
      if(!it.done && it.dueAt){const at=new Date(it.dueAt).getTime(); if(Number.isFinite(at)){
-       add('task|'+(it.name||'task')+'|24h',t,at-86400000,'۱ روز مانده — '+it.name);
-       add('task|'+(it.name||'task')+'|now',t,at,'موعد کار — '+it.name);
+       const identity=si+'|'+ii;
+       add('task|'+identity+'|24h',t,at-86400000,'۱ روز مانده — '+it.name);
+       add('task|'+identity+'|now',t,at,'موعد کار — '+it.name);
      }}
    }));
  });
