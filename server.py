@@ -7,12 +7,11 @@ import time
 from datetime import datetime, timedelta
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse
-from zoneinfo import ZoneInfo
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.path.join(ROOT, "komision.db")
 PORT = 8765
-TEHRAN = ZoneInfo("Asia/Tehran")
+TEHRAN_OFFSET = timedelta(hours=3, minutes=30)
 
 def init_db():
     with sqlite3.connect(DB_PATH) as db:
@@ -73,7 +72,7 @@ def jalali_to_gregorian(jy, jm, jd):
     leap_g = gy // 4 - ((gy // 100 + 1) * 3 // 4) - 150
     march = 20 + leap_j - leap_g
     days = (jm - 1) * 31 + (jd - 1) if jm <= 7 else (jm - 1) * 30 + 6 + (jd - 1)
-    return datetime(gy, 3, march, tzinfo=TEHRAN) + timedelta(days=days)
+    return datetime(gy, 3, march) + timedelta(days=days)
 
 def jalali_datetime_ts(date_text, time_text="00:00"):
     try:
@@ -81,7 +80,7 @@ def jalali_datetime_ts(date_text, time_text="00:00"):
         jy, jm, jd = [int(x) for x in s.split("/")]
         hh, mm = [int(x) for x in str(time_text or "00:00").split(":")[:2]]
         g = jalali_to_gregorian(jy, jm, jd)
-        return g.replace(hour=hh, minute=mm, second=0, microsecond=0).timestamp()
+        local_dt = g.replace(hour=hh, minute=mm, second=0, microsecond=0)\n        return (local_dt - TEHRAN_OFFSET).replace(tzinfo=__import__("datetime").timezone.utc).timestamp()
     except Exception:
         return None
 
@@ -89,7 +88,7 @@ def iso_ts(value):
     try:
         dt = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
         if dt.tzinfo is None:
-            dt = dt.replace(tzinfo=TEHRAN)
+            dt = dt.replace(tzinfo=__import__("datetime").timezone(TEHRAN_OFFSET))
         return dt.timestamp()
     except Exception:
         return None
