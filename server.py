@@ -80,7 +80,8 @@ def jalali_datetime_ts(date_text, time_text="00:00"):
         jy, jm, jd = [int(x) for x in s.split("/")]
         hh, mm = [int(x) for x in str(time_text or "00:00").split(":")[:2]]
         g = jalali_to_gregorian(jy, jm, jd)
-        local_dt = g.replace(hour=hh, minute=mm, second=0, microsecond=0)\n        return (local_dt - TEHRAN_OFFSET).replace(tzinfo=__import__("datetime").timezone.utc).timestamp()
+        local_dt = g.replace(hour=hh, minute=mm, second=0, microsecond=0)
+        return (local_dt - TEHRAN_OFFSET).replace(tzinfo=__import__("datetime").timezone.utc).timestamp()
     except Exception:
         return None
 
