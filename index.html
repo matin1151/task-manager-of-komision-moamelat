@@ -863,7 +863,13 @@ const workflows={
 ]};
 function loadDB(){
  try{
-   const raw=JSON.parse(localStorage.getItem(KEY)||'{"transactions":[],"tasks":[]}');
+   let raw=null;
+   try{const req=new XMLHttpRequest();req.open('GET','/api/state',false);req.send();if(req.status===200)raw=JSON.parse(req.responseText)}catch(e){}
+   const legacy=JSON.parse(localStorage.getItem(KEY)||'{"transactions":[],"tasks":[]}');
+   if(!raw || (Array.isArray(raw.transactions)&&raw.transactions.length===0&&Array.isArray(legacy.transactions)&&legacy.transactions.length>0)){
+     raw=legacy;
+     try{const req=new XMLHttpRequest();req.open('POST','/api/state',false);req.setRequestHeader('Content-Type','application/json');req.send(JSON.stringify(raw))}catch(e){}
+   }
    return {transactions:Array.isArray(raw?.transactions)?raw.transactions:[],tasks:Array.isArray(raw?.tasks)?raw.tasks:[]};
  }catch(e){
    console.warn('Local data could not be parsed; starting with a safe empty database.',e);
@@ -915,7 +921,7 @@ function faDate(value){
  return jj||'—';
 }
 document.getElementById('today').textContent=new Date().toLocaleDateString('fa-IR',{weekday:'long',year:'numeric',month:'long',day:'numeric'});
-function save(){localStorage.setItem(KEY,JSON.stringify(db))}
+function save(){const payload=JSON.stringify(db);localStorage.setItem(KEY,payload);try{const req=new XMLHttpRequest();req.open('POST','/api/state',false);req.setRequestHeader('Content-Type','application/json');req.send(payload)}catch(e){}}
 migrateTransactionDates();
 function toast(s){let t=document.getElementById('toast');t.textContent=s;t.style.display='block';setTimeout(()=>t.style.display='none',2200)}
 function showPage(p){page=p;document.querySelectorAll('.nav button').forEach(x=>x.classList.remove('active'));let btn=[...document.querySelectorAll('.nav button')].find(x=>x.getAttribute('onclick')?.includes("'"+p+"'"));if(btn)btn.classList.add('active');document.getElementById('pageTitle').textContent={dashboard:'داشبورد',auction:'مزایده‌ها',tender:'مناقصه‌ها',purchase:'خریدها',all:'همه معاملات',tasks:'کارهای من',reports:'گزارش‌ها',archive:'بایگانی',settings:'تنظیمات'}[p];render()}
