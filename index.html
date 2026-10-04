@@ -6,7 +6,7 @@
 <title>دستیار کمیسیون معاملات | متین</title>
 
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;500;600;700;800&display=swap');
+@font-face{font-family:Vazirmatn;src:url('./assets/Vazirmatn-Regular.ttf') format('truetype');font-style:normal;font-weight:400;font-display:swap}
 
 :root{
   --navy:#0f3558; --navy2:#123f68; --blue:#1767a9; --gold:#c9972b;
@@ -759,7 +759,7 @@ button{cursor:pointer;border:0}
 <body>
 <div class="app">
 <aside class="side">
-  <div class="brand">دستیار کمیسیون معاملات<small>کاربر: متین</small></div>
+  <div class="brand">دستیار کمیسیون معاملات<small>کارشناس کمیسیون معاملات</small></div>
   <div class="nav">
     <button class="active" onclick="showPage('dashboard')">⌂ داشبورد</button>
     <button onclick="showPage('auction')">مزایده‌ها</button>
@@ -863,14 +863,16 @@ const workflows={
 ['پرداخت',['دریافت فیش پرداخت بانکی از مالی','امضای ذیحساب در ستاد','امضای مقام تشخیص','امضای صاحب امضای سوم','ارسال فیش بانکی به ستاد','امضای ذیحساب','چاپ برگه «تحویل حواله بانکی»']],
 ['★ ثبت در بایگانی',['ثبت در بایگانی']]
 ]};
-function loadDB(){
- try{
-   let raw=null;
-   try{const req=new XMLHttpRequest();req.open('GET','/api/state',false);req.send();if(req.status===200)raw=JSON.parse(req.responseText)}catch(e){}
-   const legacy=JSON.parse(localStorage.getItem(KEY)||'{"transactions":[],"tasks":[]}');
-   if(!raw || (Array.isArray(raw.transactions)&&raw.transactions.length===0&&Array.isArray(legacy.transactions)&&legacy.transactions.length>0)){
-     raw=legacy;
-     try{const req=new XMLHttpRequest();req.open('POST','/api/state',false);req.setRequestHeader('Content-Type','application/json');req.send(JSON.stringify(raw))}catch(e){}
+ let API_TOKEN='',stateVersion=null,saveTimer=null,saveInFlight=false,saveQueued=false;
+ function loadDB(){
+  try{
+    let raw=null;
+    try{const session=new XMLHttpRequest();session.open('GET','/api/session',false);session.send();if(session.status===200)API_TOKEN=JSON.parse(session.responseText).token||''}catch(e){}
+    try{const req=new XMLHttpRequest();req.open('GET','/api/state',false);req.send();if(req.status===200){raw=JSON.parse(req.responseText);stateVersion=Number(req.getResponseHeader('X-State-Version'))||null}}catch(e){}
+    const legacy=JSON.parse(localStorage.getItem(KEY)||'{"transactions":[],"tasks":[]}');
+    if(!raw || (Array.isArray(raw.transactions)&&raw.transactions.length===0&&Array.isArray(legacy.transactions)&&legacy.transactions.length>0)){
+      raw=legacy;
+      try{const req=new XMLHttpRequest();req.open('POST','/api/state',false);req.setRequestHeader('Content-Type','application/json');req.setRequestHeader('X-Dastyar-Token',API_TOKEN);if(stateVersion!==null)req.setRequestHeader('If-Match',String(stateVersion));req.send(JSON.stringify({state:raw,version:stateVersion}))}catch(e){}
    }
    return {transactions:Array.isArray(raw?.transactions)?raw.transactions:[],tasks:Array.isArray(raw?.tasks)?raw.tasks:[]};
  }catch(e){
@@ -923,7 +925,24 @@ function faDate(value){
  return jj||'—';
 }
 document.getElementById('today').textContent=new Date().toLocaleDateString('fa-IR',{weekday:'long',year:'numeric',month:'long',day:'numeric'});
-function save(){const payload=JSON.stringify(db);localStorage.setItem(KEY,payload);try{const req=new XMLHttpRequest();req.open('POST','/api/state',false);req.setRequestHeader('Content-Type','application/json');req.send(payload)}catch(e){}}
+ function mergeStates(remote,local){
+  const mergeById=(a,b)=>{const out=new Map();(Array.isArray(a)?a:[]).forEach(x=>out.set(String(x.id),x));(Array.isArray(b)?b:[]).forEach(x=>out.set(String(x.id),x));return [...out.values()]};
+  return {transactions:mergeById(remote?.transactions,local?.transactions),tasks:mergeById(remote?.tasks,local?.tasks)};
+ }
+ async function flushSave(){
+  if(saveInFlight||!saveQueued)return;
+  saveQueued=false;saveInFlight=true;
+  const local=JSON.parse(JSON.stringify(db));
+  try{
+   const response=await fetch('/api/state',{method:'POST',headers:{'Content-Type':'application/json','X-Dastyar-Token':API_TOKEN,...(stateVersion!==null?{'If-Match':String(stateVersion)}:{})},body:JSON.stringify({state:local,version:stateVersion})});
+   const result=await response.json().catch(()=>({}));
+   if(response.status===409&&result.state){db=mergeStates(result.state,local);stateVersion=Number(result.version)||stateVersion;localStorage.setItem(KEY,JSON.stringify(db));saveQueued=true}
+   else if(response.ok){stateVersion=Number(result.version)||stateVersion}
+   else toast('ذخیره انجام نشد؛ اطلاعات محلی نگه داشته شد');
+  }catch(e){toast('اتصال ذخیره‌سازی موقتاً برقرار نیست؛ اطلاعات محلی حفظ شد')}
+  finally{saveInFlight=false;if(saveQueued)flushSave()}
+ }
+ function save(){localStorage.setItem(KEY,JSON.stringify(db));saveQueued=true;clearTimeout(saveTimer);saveTimer=setTimeout(flushSave,80)}
 migrateTransactionDates();
 function toast(s){let t=document.getElementById('toast');t.textContent=s;t.style.display='block';setTimeout(()=>t.style.display='none',2200)}
 function showPage(p){page=p;document.querySelectorAll('.nav button').forEach(x=>x.classList.remove('active'));let btn=[...document.querySelectorAll('.nav button')].find(x=>x.getAttribute('onclick')?.includes("'"+p+"'"));if(btn)btn.classList.add('active');document.getElementById('pageTitle').textContent={dashboard:'داشبورد',auction:'مزایده‌ها',tender:'مناقصه‌ها',purchase:'خریدها',all:'همه معاملات',tasks:'کارهای من',reports:'گزارش‌ها',archive:'بایگانی',settings:'تنظیمات'}[p];render()}
@@ -1388,7 +1407,7 @@ function deleteTx(id){
 }
 function archiveTx(id){let t=db.transactions.find(x=>x.id===id);if(!t)return;if(confirm('این معامله به بایگانی منتقل شود؟')){t.archived=true;t.status='بایگانی';save();toast('معامله بایگانی شد');showPage('archive')}}
 function exportJSON(){let blob=new Blob([JSON.stringify(db,null,2)],{type:'application/json'}),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='yar-komision-backup.json';a.click();URL.revokeObjectURL(a.href)}
-function clearDB(){if(confirm('تمام داده‌های محلی حذف شود؟')){db={transactions:[],tasks:[]};save();render()}}
+async function clearDB(){if(confirm('این کار یک پشتیبان خودکار می‌سازد و داده‌های برنامه را خالی می‌کند. ادامه می‌دهید؟')&&prompt('برای تأیید، حذف را بنویسید:')==='حذف'){db={transactions:[],tasks:[]};save();render();toast('داده‌ها پاک و نسخه پشتیبان نگه‌داری شد')}}
 function esc(s){return String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m]))}
 render();
 
@@ -1445,7 +1464,7 @@ function fireAlarm(ev){
 }
 function checkAlarms(){
  const store=alarmStore(),now=Date.now();let changed=false;
- alarmEvents().forEach(ev=>{if(ev.at<=now&&now-ev.at<36*3600000&&!store[ev.id]){store[ev.id]=now;changed=true;fireAlarm(ev)}});
+ alarmEvents().forEach(ev=>{if(ev.at<=now&&now-ev.at<14*86400000&&!store[ev.id]){store[ev.id]=now;changed=true;fireAlarm(ev)}});
  if(changed)saveAlarmStore(store);
 }
 function enableAlarms(){

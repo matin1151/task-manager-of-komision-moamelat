@@ -10,19 +10,32 @@ $Server = Join-Path $Root 'server.py'
 $DataDir = Join-Path $env:LOCALAPPDATA 'DastyarKomisionData'
 $LogDir = Join-Path $DataDir 'logs'
 $LogPath = Join-Path $LogDir 'server.log'
-$HealthUrl = 'http://127.0.0.1:8765/api/health'
-$AppUrl = 'http://127.0.0.1:8765/index.html'
+$PortFile = Join-Path $DataDir 'server.port'
+$PortRange = 8765..8785
 
-function Test-Healthy {
+function Test-Healthy($Port) {
     try {
-        $response = Invoke-WebRequest -Uri $HealthUrl -UseBasicParsing -TimeoutSec 2
-        return $response.StatusCode -eq 200 -and $response.Content -match '"ok"\s*:\s*true'
+        $response = Invoke-WebRequest -Uri "http://127.0.0.1:$Port/api/health" -UseBasicParsing -TimeoutSec 1
+        return $response.StatusCode -eq 200 -and $response.Content -match '"app"\s*:\s*"DastyarKomision"'
     } catch {
         return $false
     }
 }
 
-function Start-Server {
+function Get-HealthyPort {
+    foreach ($Port in $PortRange) { if (Test-Healthy $Port) { return $Port } }
+    return $null
+}
+
+function Get-FreePort {
+    foreach ($Port in $PortRange) {
+        $client = New-Object Net.Sockets.TcpClient
+        try { $client.Connect('127.0.0.1', $Port); $client.Close() } catch { $client.Dispose(); return $Port }
+    }
+    throw 'No free local application port is available.'
+}
+
+function Start-Server($Port) {
     if (-not (Test-Path $Runtime)) { throw "Runtime not found: $Runtime" }
     if (-not (Test-Path $Server)) { throw "Server not found: $Server" }
 
@@ -38,6 +51,7 @@ function Start-Server {
     $psi.RedirectStandardOutput = $true
     $psi.RedirectStandardError = $true
     $psi.EnvironmentVariables['DASTYAR_KOMISION_DATA_DIR'] = $DataDir
+    $psi.EnvironmentVariables['DASTYAR_KOMISION_PORT'] = [string]$Port
     $process = [System.Diagnostics.Process]::Start($psi)
 
     Start-Job -ScriptBlock {
@@ -50,12 +64,14 @@ function Start-Server {
     } -ArgumentList $process.Id, $LogPath | Out-Null
 }
 
-if (-not (Test-Healthy)) {
-    Start-Server
+${port} = Get-HealthyPort
+if (-not ${port}) {
+    ${port} = Get-FreePort
+    Start-Server ${port}
     $ready = $false
     for ($i = 0; $i -lt 30; $i++) {
         Start-Sleep -Milliseconds 500
-        if (Test-Healthy) {
+        if (Test-Healthy ${port}) {
             $ready = $true
             break
         }
@@ -66,5 +82,5 @@ if (-not (Test-Healthy)) {
 }
 
 if (-not $NoBrowser) {
-    Start-Process $AppUrl
+    Start-Process "http://127.0.0.1:${port}/index.html"
 }

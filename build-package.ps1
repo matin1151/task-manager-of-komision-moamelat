@@ -4,8 +4,10 @@ $Root = Split-Path -Parent $MyInvocation.MyCommand.Path
 $BuildDir = Join-Path $Root 'build'
 $PackageDir = Join-Path $BuildDir 'DastyarKomision-Windows'
 $RuntimeZip = Join-Path $BuildDir 'python-embed.zip'
-$RuntimeDir = Join-Path $PackageDir 'runtime'
+$AppDir = Join-Path $PackageDir 'app'
+$RuntimeDir = Join-Path $AppDir 'runtime'
 $PythonUrl = 'https://www.python.org/ftp/python/3.12.10/python-3.12.10-embed-amd64.zip'
+$ExpectedPythonSha256 = '4d6f5f81a4bca11191c4c7c6b43632694d0a4ce74e068619d8fdc161d469859a'
 
 Write-Host 'Building Dastyar Komision Windows delivery package...'
 
@@ -14,10 +16,15 @@ if (Test-Path $PackageDir) {
 }
 New-Item -ItemType Directory -Force -Path $PackageDir | Out-Null
 New-Item -ItemType Directory -Force -Path $BuildDir | Out-Null
+New-Item -ItemType Directory -Force -Path $AppDir | Out-Null
 
-foreach ($item in @('index.html', 'server.py', 'install.bat', 'install.ps1', 'launcher.ps1', 'start-app.vbs', 'health-check.ps1', 'uninstall.ps1', 'README.txt', 'DELIVERY_GUIDE_FA.md')) {
+foreach ($item in @('install.bat', 'install.ps1', 'README.txt', 'DELIVERY_GUIDE_FA.md')) {
     Copy-Item -LiteralPath (Join-Path $Root $item) -Destination (Join-Path $PackageDir $item) -Force
 }
+foreach ($item in @('index.html', 'server.py', 'launcher.ps1', 'start-app.vbs', 'health-check.ps1', 'uninstall.ps1')) {
+    Copy-Item -LiteralPath (Join-Path $Root $item) -Destination (Join-Path $AppDir $item) -Force
+}
+Copy-Item -LiteralPath (Join-Path $Root 'assets') -Destination $AppDir -Recurse -Force
 
 if (-not (Test-Path $RuntimeZip)) {
     Write-Host 'Downloading bundled Python runtime...'
@@ -27,13 +34,14 @@ if (-not (Test-Path $RuntimeZip)) {
 
 Write-Host 'Expanding runtime...'
 Expand-Archive -Path $RuntimeZip -DestinationPath $RuntimeDir -Force
+$pythonHash = (Get-FileHash -LiteralPath (Join-Path $RuntimeDir 'python.exe') -Algorithm SHA256).Hash.ToLowerInvariant()
+if ($pythonHash -ne $ExpectedPythonSha256) {
+    throw "Python executable hash mismatch. Expected $ExpectedPythonSha256 but got $pythonHash"
+}
 
 $pth = Get-ChildItem -Path $RuntimeDir -Filter '*._pth' | Select-Object -First 1
 if ($pth) {
     $lines = Get-Content -LiteralPath $pth.FullName
-    if ($lines -notcontains 'Lib\site-packages') {
-        Add-Content -LiteralPath $pth.FullName -Value 'Lib\site-packages'
-    }
 }
 
 $ZipPath = Join-Path $BuildDir 'DastyarKomision-Windows.zip'

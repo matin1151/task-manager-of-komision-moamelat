@@ -3,14 +3,17 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-$HealthUrl = 'http://127.0.0.1:8765/api/health'
+$Ports = 8765..8785
 
 try {
-    $response = Invoke-WebRequest -Uri $HealthUrl -UseBasicParsing -TimeoutSec 3
-    if ($response.StatusCode -ne 200) {
-        throw "Unexpected status code $($response.StatusCode)"
+    $health = $null
+    foreach ($port in $Ports) {
+        try {
+            $response = Invoke-WebRequest -Uri "http://127.0.0.1:$port/api/health" -UseBasicParsing -TimeoutSec 1
+            if ($response.StatusCode -eq 200 -and $response.Content -match '"app"\s*:\s*"DastyarKomision"') { $health = $response.Content | ConvertFrom-Json; break }
+        } catch {}
     }
-    $health = $response.Content | ConvertFrom-Json
+    if (-not $health) { throw 'No healthy Dastyar Komision server was found.' }
     if (-not $health.ok) {
         throw 'Server returned ok=false'
     }

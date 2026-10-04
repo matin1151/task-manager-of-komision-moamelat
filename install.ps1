@@ -7,6 +7,7 @@ $StartupDir = [Environment]::GetFolderPath('Startup')
 $DesktopDir = [Environment]::GetFolderPath('Desktop')
 $StartMenuDir = Join-Path ([Environment]::GetFolderPath('Programs')) 'Dastyar Komision'
 $LogPath = Join-Path $DataDir 'install.log'
+$PayloadDir = Join-Path $PSScriptRoot 'app'
 
 function Write-Step($Message) {
     Write-Host "[Dastyar Komision] $Message"
@@ -41,11 +42,14 @@ function Stop-OldServer {
 
 function Assert-Payload {
     foreach ($file in @('index.html', 'server.py', 'launcher.ps1', 'start-app.vbs', 'uninstall.ps1', 'health-check.ps1')) {
-        if (-not (Test-Path (Join-Path $PSScriptRoot $file))) {
+        if (-not (Test-Path (Join-Path $PayloadDir $file))) {
             throw "Installer payload is missing $file"
         }
     }
-    if (-not (Test-Path (Join-Path $PSScriptRoot 'runtime\pythonw.exe'))) {
+    if (-not (Test-Path (Join-Path $PayloadDir 'assets\Vazirmatn-Regular.ttf'))) {
+        throw 'Bundled Persian font is missing.'
+    }
+    if (-not (Test-Path (Join-Path $PayloadDir 'runtime\pythonw.exe'))) {
         throw 'Bundled Python runtime is missing. Build the Windows delivery package before installing.'
     }
 }
@@ -61,8 +65,8 @@ try {
     New-Item -ItemType Directory -Force -Path $InstallDir | Out-Null
     New-Item -ItemType Directory -Force -Path $StartMenuDir | Out-Null
 
-    foreach ($item in @('index.html', 'server.py', 'launcher.ps1', 'start-app.vbs', 'uninstall.ps1', 'health-check.ps1', 'runtime')) {
-        $source = Join-Path $PSScriptRoot $item
+    foreach ($item in @('index.html', 'server.py', 'launcher.ps1', 'start-app.vbs', 'uninstall.ps1', 'health-check.ps1', 'assets', 'runtime')) {
+        $source = Join-Path $PayloadDir $item
         $target = Join-Path $InstallDir $item
         Copy-Item -LiteralPath $source -Destination $target -Recurse -Force
     }
@@ -76,14 +80,15 @@ try {
 
     Write-Step 'Creating desktop and startup shortcuts...'
     $launcher = Join-Path $InstallDir 'start-app.vbs'
-    New-Shortcut -Path (Join-Path $DesktopDir 'Dastyar Komision.lnk') -Target $launcher -WorkingDirectory $InstallDir
-    New-Shortcut -Path (Join-Path $StartupDir 'Dastyar Komision.lnk') -Target $launcher -WorkingDirectory $InstallDir
-    New-Shortcut -Path (Join-Path $StartMenuDir 'Open Dastyar Komision.lnk') -Target $launcher -WorkingDirectory $InstallDir
+    $wscript = Join-Path $env:SystemRoot 'System32\wscript.exe'
+    New-Shortcut -Path (Join-Path $DesktopDir 'Dastyar Komision.lnk') -Target $wscript -Arguments "//B //Nologo `"$launcher`"" -WorkingDirectory $InstallDir
+    New-Shortcut -Path (Join-Path $StartupDir 'Dastyar Komision.lnk') -Target $wscript -Arguments "//B //Nologo `"$launcher`" -NoBrowser" -WorkingDirectory $InstallDir
+    New-Shortcut -Path (Join-Path $StartMenuDir 'Open Dastyar Komision.lnk') -Target $wscript -Arguments "//B //Nologo `"$launcher`"" -WorkingDirectory $InstallDir
     New-Shortcut -Path (Join-Path $StartMenuDir 'Health Check.lnk') -Target 'powershell.exe' -Arguments "-NoProfile -ExecutionPolicy Bypass -File `"$InstallDir\health-check.ps1`"" -WorkingDirectory $InstallDir
     New-Shortcut -Path (Join-Path $StartMenuDir 'Uninstall.lnk') -Target 'powershell.exe' -Arguments "-NoProfile -ExecutionPolicy Bypass -File `"$InstallDir\uninstall.ps1`"" -WorkingDirectory $InstallDir
 
     Write-Step 'Starting application...'
-    & $launcher
+    Start-Process -FilePath $wscript -ArgumentList @('//B', '//Nologo', $launcher)
     Start-Sleep -Seconds 2
     & (Join-Path $InstallDir 'health-check.ps1') -Quiet
 
