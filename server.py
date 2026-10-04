@@ -2,6 +2,7 @@ import json
 import os
 import sqlite3
 import subprocess
+import sys
 import threading
 import time
 from datetime import datetime, timedelta
@@ -9,11 +10,18 @@ from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
-DB_PATH = os.path.join(ROOT, "komision.db")
+APP_NAME = "DastyarKomision"
+DATA_DIR = os.environ.get("DASTYAR_KOMISION_DATA_DIR") or os.path.join(
+    os.environ.get("LOCALAPPDATA", ROOT),
+    "DastyarKomisionData",
+)
+DB_PATH = os.path.join(DATA_DIR, "komision.db")
+PID_PATH = os.path.join(DATA_DIR, "server.pid")
 PORT = 8765
 TEHRAN_OFFSET = timedelta(hours=3, minutes=30)
 
 def init_db():
+    os.makedirs(DATA_DIR, exist_ok=True)
     with sqlite3.connect(DB_PATH) as db:
         db.execute("CREATE TABLE IF NOT EXISTS app_state (id INTEGER PRIMARY KEY CHECK(id=1), payload TEXT NOT NULL)")
         db.execute("CREATE TABLE IF NOT EXISTS fired_alarms (alarm_key TEXT PRIMARY KEY, fired_at REAL NOT NULL)")
@@ -155,7 +163,13 @@ class Handler(SimpleHTTPRequestHandler):
     def do_GET(self):
         path = urlparse(self.path).path
         if path == "/api/health":
-            body = b'{"ok":true}'
+            body = json.dumps({
+                "ok": True,
+                "app": APP_NAME,
+                "port": PORT,
+                "dataDir": DATA_DIR,
+                "database": DB_PATH,
+            }, ensure_ascii=False).encode("utf-8")
             self.send_response(200); self.send_header("Content-Type", "application/json"); self.send_header("Content-Length", str(len(body))); self.end_headers(); self.wfile.write(body); return
         if path == "/api/state":
             body = json.dumps(read_state(), ensure_ascii=False).encode("utf-8")
@@ -179,5 +193,13 @@ class Handler(SimpleHTTPRequestHandler):
 if __name__ == "__main__":
     os.chdir(ROOT)
     init_db()
+    try:
+        with open(PID_PATH, "w", encoding="utf-8") as pid_file:
+            pid_file.write(str(os.getpid()))
+    except Exception:
+        pass
     threading.Thread(target=alarm_loop, daemon=True).start()
-    ThreadingHTTPServer(("127.0.0.1", PORT), Handler).serve_forever()
+    try:
+        ThreadingHTTPServer(("127.0.0.1", PORT), Handler).serve_forever()
+    except KeyboardInterrupt:
+        sys.exit(0)
