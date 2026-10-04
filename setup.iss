@@ -3,7 +3,7 @@
 #define MyAppPublisher "Dastyar Komision"
 
 [Setup]
-AppId={{B8AB4F0B-5E7E-4E18-9C3E-DASTYARKOMISION}
+AppId={{B8AB4F0B-5E7E-4E18-9C3E-DA57A4C0B150}
 AppName={#MyAppName}
 AppVersion={#MyAppVersion}
 AppPublisher={#MyAppPublisher}
@@ -22,9 +22,9 @@ DisableProgramGroupPage=yes
 Source: "build\DastyarKomision-Windows\app\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
-Name: "{autodesktop}\Dastyar Komision"; Filename: "{sys}\wscript.exe"; Parameters: "//B //Nologo \\"{app}\start-app.vbs\\""
-Name: "{userstartup}\Dastyar Komision"; Filename: "{sys}\wscript.exe"; Parameters: "//B //Nologo \\"{app}\start-app.vbs\\" -NoBrowser"
-Name: "{group}\Open Dastyar Komision"; Filename: "{sys}\wscript.exe"; Parameters: "//B //Nologo \\"{app}\start-app.vbs\\""
+Name: "{autodesktop}\Dastyar Komision"; Filename: "{sys}\wscript.exe"; Parameters: "//B //Nologo ""{app}\start-app.vbs"""
+Name: "{userstartup}\Dastyar Komision"; Filename: "{sys}\wscript.exe"; Parameters: "//B //Nologo ""{app}\start-app.vbs"" -NoBrowser"
+Name: "{group}\Open Dastyar Komision"; Filename: "{sys}\wscript.exe"; Parameters: "//B //Nologo ""{app}\start-app.vbs"""
 
 [Run]
-Filename: "{sys}\wscript.exe"; Parameters: "//B //Nologo \\"{app}\start-app.vbs\\""; Flags: nowait postinstall skipifsilent
+Filename: "{sys}\wscript.exe"; Parameters: "//B //Nologo ""{app}\start-app.vbs"""; Flags: nowait postinstall skipifsilent
