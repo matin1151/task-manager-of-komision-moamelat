@@ -6,4 +6,4 @@ $compiler = if (Test-Path -LiteralPath $localCompiler) { $localCompiler } elseif
 if (-not $compiler) { throw 'Inno Setup Compiler (ISCC.exe) is not available.' }
 & $compiler (Join-Path $root 'setup.iss')
 if ($LASTEXITCODE -ne 0) { throw "Inno Setup failed with exit code $LASTEXITCODE" }
-Write-Host (Join-Path $root 'build\DastyarKomision-Setup-v1.0.1.exe') -ForegroundColor Green
+Write-Host (Join-Path $root 'build\DastyarKomision-Setup-v1.0.2.exe') -ForegroundColor Green

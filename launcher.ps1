@@ -9,7 +9,7 @@ $Runtime = Join-Path $Root 'runtime\pythonw.exe'
 $Server = Join-Path $Root 'server.py'
 $DataDir = Join-Path $env:LOCALAPPDATA 'DastyarKomisionData'
 $LogDir = Join-Path $DataDir 'logs'
-$LogPath = Join-Path $LogDir 'server.log'
+$LogPath = Join-Path $LogDir 'launcher.log'
 $PortFile = Join-Path $DataDir 'server.port'
 $PortRange = 8765..8785
 
@@ -22,15 +22,35 @@ function Test-Healthy($Port) {
     }
 }
 
+function Test-Listening($Port) {
+    $client = New-Object Net.Sockets.TcpClient
+    try {
+        $result = $client.BeginConnect('127.0.0.1', $Port, $null, $null)
+        if (-not $result.AsyncWaitHandle.WaitOne(150)) { return $false }
+        $client.EndConnect($result)
+        return $true
+    } catch {
+        return $false
+    } finally {
+        $client.Dispose()
+    }
+}
+
 function Get-HealthyPort {
-    foreach ($Port in $PortRange) { if (Test-Healthy $Port) { return $Port } }
+    if (Test-Path -LiteralPath $PortFile) {
+        $savedPort = [int](Get-Content -LiteralPath $PortFile -ErrorAction SilentlyContinue)
+        if ($savedPort -in $PortRange -and (Test-Healthy $savedPort)) { return $savedPort }
+    }
+    foreach ($Port in $PortRange) {
+        if ((Test-Listening $Port) -and (Test-Healthy $Port)) { return $Port }
+    }
     return $null
 }
 
 function Get-FreePort {
     foreach ($Port in $PortRange) {
-        $client = New-Object Net.Sockets.TcpClient
-        try { $client.Connect('127.0.0.1', $Port); $client.Close() } catch { $client.Dispose(); return $Port }
+        $listener = [Net.Sockets.TcpListener]::new([Net.IPAddress]::Loopback, $Port)
+        try { $listener.Start(); return $Port } catch {} finally { try { $listener.Stop() } catch {} }
     }
     throw 'No free local application port is available.'
 }
@@ -42,45 +62,33 @@ function Start-Server($Port) {
     New-Item -ItemType Directory -Force -Path $LogDir | Out-Null
     $env:DASTYAR_KOMISION_DATA_DIR = $DataDir
 
-    $psi = New-Object System.Diagnostics.ProcessStartInfo
-    $psi.FileName = $Runtime
-    $psi.Arguments = "`"$Server`""
-    $psi.WorkingDirectory = $Root
-    $psi.UseShellExecute = $false
-    $psi.CreateNoWindow = $true
-    $psi.RedirectStandardOutput = $true
-    $psi.RedirectStandardError = $true
-    $psi.EnvironmentVariables['DASTYAR_KOMISION_DATA_DIR'] = $DataDir
-    $psi.EnvironmentVariables['DASTYAR_KOMISION_PORT'] = [string]$Port
-    $process = [System.Diagnostics.Process]::Start($psi)
-
-    Start-Job -ScriptBlock {
-        param($ProcessId, $LogPath)
-        try {
-            $p = Get-Process -Id $ProcessId -ErrorAction Stop
-            $p.WaitForExit()
-            Add-Content -Path $LogPath -Encoding UTF8 -Value ("[{0}] server process exited with code {1}" -f (Get-Date -Format s), $p.ExitCode)
-        } catch {}
-    } -ArgumentList $process.Id, $LogPath | Out-Null
+    $env:DASTYAR_KOMISION_PORT = [string]$Port
+    Start-Process -FilePath $Runtime -ArgumentList @($Server) -WorkingDirectory $Root -WindowStyle Hidden | Out-Null
 }
 
-${port} = Get-HealthyPort
-if (-not ${port}) {
-    ${port} = Get-FreePort
-    Start-Server ${port}
-    $ready = $false
-    for ($i = 0; $i -lt 30; $i++) {
-        Start-Sleep -Milliseconds 500
-        if (Test-Healthy ${port}) {
-            $ready = $true
-            break
+try {
+    ${port} = Get-HealthyPort
+    if (-not ${port}) {
+        ${port} = Get-FreePort
+        Start-Server ${port}
+        $ready = $false
+        for ($i = 0; $i -lt 30; $i++) {
+            Start-Sleep -Milliseconds 500
+            if (Test-Healthy ${port}) {
+                $ready = $true
+                break
+            }
+        }
+        if (-not $ready) {
+            throw 'The local server did not become healthy within 15 seconds.'
         }
     }
-    if (-not $ready) {
-        throw 'The local server did not become healthy within 15 seconds.'
-    }
-}
 
-if (-not $NoBrowser) {
-    Start-Process "http://127.0.0.1:${port}/index.html"
+    if (-not $NoBrowser) {
+        Start-Process "http://127.0.0.1:${port}/index.html"
+    }
+} catch {
+    New-Item -ItemType Directory -Force -Path $LogDir | Out-Null
+    Add-Content -LiteralPath $LogPath -Encoding UTF8 -Value ("[{0}] {1}" -f (Get-Date -Format s), $_.Exception.Message)
+    throw
 }

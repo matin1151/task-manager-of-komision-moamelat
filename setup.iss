@@ -1,5 +1,5 @@
 #define MyAppName "Dastyar Komision"
-#define MyAppVersion "1.0.1"
+#define MyAppVersion "1.0.2"
 #define MyAppPublisher "Dastyar Komision"
 
 [Setup]
@@ -28,3 +28,21 @@ Name: "{group}\Open Dastyar Komision"; Filename: "{sys}\wscript.exe"; Parameters
 
 [Run]
 Filename: "{sys}\wscript.exe"; Parameters: "//B //Nologo ""{app}\start-app.vbs"""; Flags: nowait postinstall skipifsilent
+
+[Code]
+function PrepareToInstall(var NeedsRestart: Boolean): String;
+var
+  PidFile: String;
+  PidText: AnsiString;
+  ResultCode: Integer;
+  ProcessId: Int64;
+begin
+  Result := '';
+  PidFile := ExpandConstant('{localappdata}\DastyarKomisionData\server.pid');
+  if LoadStringFromFile(PidFile, PidText) then
+  begin
+    ProcessId := StrToInt64Def(Trim(String(PidText)), 0);
+    if ProcessId > 0 then
+      Exec(ExpandConstant('{sys}\taskkill.exe'), '/PID ' + IntToStr(ProcessId) + ' /F', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+  end;
+end;
